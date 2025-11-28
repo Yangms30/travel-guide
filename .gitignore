@@ -22,3 +22,13 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Python (AI Server)
+travel-guide-ai-server/venv/
+travel-guide-ai-server/__pycache__/
+travel-guide-ai-server/**/__pycache__/
+travel-guide-ai-server/.env
+travel-guide-ai-server/**/*.pyc
+travel-guide-ai-server/**/*.pyo
+travel-guide-ai-server/**/*.pyd
+travel-guide-ai-server/.pytest_cache/

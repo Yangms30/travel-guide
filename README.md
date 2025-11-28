@@ -1,10 +1,30 @@
-# 🌍 Travel Guide - AI 기반 스마트 여행 플래너
+# 🌍 Travel Guide - AI 기반 스마트 여행 플래너 (풀스택)
 
 > 여행 계획부터 현지 가이드까지, 당신의 완벽한 여행을 위한 올인원 솔루션
 
+## 🏗️ 프로젝트 구조
+
+이 프로젝트는 **모노레포(Monorepo)** 구조로, 프론트엔드와 AI 백엔드를 하나의 저장소에서 관리합니다.
+
+```
+travel-guide-app/
+├── src/                          # React 프론트엔드
+├── travel-guide-ai-server/       # FastAPI AI 서버
+├── public/
+├── package.json
+└── README.md
+```
+
+### Frontend
 [![React](https://img.shields.io/badge/React-19.2.0-61DAFB?style=flat-square&logo=react&logoColor=white)](https://reactjs.org/)
 [![Vite](https://img.shields.io/badge/Vite-7.2.4-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev/)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-3.4.17-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+
+### Backend (AI Server)
+[![Python](https://img.shields.io/badge/Python-3.9+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.109-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-0.0.20-FF6B6B?style=flat-square)](https://github.com/langchain-ai/langgraph)
+
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 
 ## 📋 목차
@@ -38,10 +58,13 @@
   - ✅ **예**: 빠른 입력 모드 (여행 이름 + 목적지 → 일정/예산 → 완료)
   - ❌ **아니오**: AI 추천 모드 (선호도 수집 → 맞춤 추천 → 선택 → 완료)
 
-**선호도 기반 추천**
+**선호도 기반 AI 추천**
 - 여행 기간, 예산, 인원, 여행 스타일(해변, 문화, 모험, 도시, 자연) 수집
-- 입력된 정보를 바탕으로 최적의 여행지 추천
+- **LangGraph Agent**가 실시간으로 최적의 여행지 분석
+- 항공료, 숙박비, 날씨, 이벤트 정보를 종합하여 추천
 - 실시간 항공편 및 숙소 추천
+
+### 3. 🤖 AI 추천 서버 (FastAPI + LangGraph)
 
 ### 2. 📍 GPS 기반 로컬 가이드
 
@@ -84,67 +107,126 @@
   - `TripContext`: 여행 데이터 관리
   - `LanguageContext`: 다국어 지원
 
+### Backend (AI Server)
+- **FastAPI 0.109.0**: 고성능 Python 웹 프레임워크
+- **LangGraph 0.0.20**: Agent 워크플로우 관리
+- **LangChain**: LLM 통합
+- **Google Gemini**: AI 모델
+
 ## 🚀 시작하기
 
 ### 필수 요구사항
 
+**Frontend:**
 - Node.js 18.x 이상
 - npm 또는 yarn
 
+**Backend (AI Server):**
+- Python 3.9 이상
+- Google Gemini API Key
+
 ### 설치 및 실행
+
+#### 1️⃣ 프론트엔드 (React)
 
 ```bash
 # 저장소 클론
-git clone https://github.com/yourusername/travel-guide-app.git
-cd travel-guide-app
+git clone https://github.com/Yangms30/travel-guide.git
+cd travel-guide
 
 # 의존성 설치
 npm install
 
 # 개발 서버 실행
 npm run dev
-
-# 프로덕션 빌드
-npm run build
-
-# 프로덕션 미리보기
-npm run preview
 ```
 
-개발 서버는 기본적으로 `http://localhost:5173`에서 실행됩니다.
+프론트엔드는 `http://localhost:5173`에서 실행됩니다.
+
+#### 2️⃣ AI 서버 (FastAPI)
+
+```bash
+# AI 서버 디렉토리로 이동
+cd travel-guide-ai-server
+
+# 가상 환경 생성 및 활성화
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# 의존성 설치
+pip install -r requirements.txt
+
+# 환경 변수 설정
+cp .env.example .env
+# .env 파일을 열어 GOOGLE_API_KEY 입력
+
+# 서버 실행
+python main.py
+```
+
+AI 서버는 `http://localhost:8000`에서 실행됩니다.
+
+#### 3️⃣ 전체 실행 (동시에)
+
+```bash
+# 터미널 1: 프론트엔드
+npm run dev
+
+# 터미널 2: AI 서버
+cd travel-guide-ai-server && python main.py
+```
+
+### API 문서
+
+AI 서버 실행 후 다음 URL에서 API 문서를 확인할 수 있습니다:
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
 
 ## 📁 프로젝트 구조
 
 ```
 travel-guide-app/
-├── public/                 # 정적 파일
-│   └── vatican-city.png   # 랜딩 페이지 배경 이미지
-├── src/
-│   ├── assets/            # 이미지, 폰트 등
-│   ├── components/        # 재사용 가능한 컴포넌트
-│   │   └── ui/           # UI 컴포넌트
-│   ├── context/          # React Context
-│   │   ├── AuthContext.jsx      # 인증 상태 관리
-│   │   ├── TripContext.jsx      # 여행 데이터 관리
-│   │   └── LanguageContext.jsx  # 다국어 지원
-│   ├── lib/              # 유틸리티 함수
-│   │   └── translations.js      # 번역 데이터
-│   ├── pages/            # 페이지 컴포넌트
-│   │   ├── LandingPage.jsx      # 랜딩 페이지
-│   │   ├── LoginPage.jsx        # 로그인
-│   │   ├── SignupPage.jsx       # 회원가입
-│   │   ├── DashboardPage.jsx    # 대시보드
-│   │   ├── PlannerPage.jsx      # 여행 플래너
-│   │   ├── GuidePage.jsx        # 로컬 가이드
-│   │   └── SettingsPage.jsx     # 설정
-│   ├── services/         # API 서비스
-│   │   └── locationService.js   # 위치 기반 서비스
-│   ├── App.jsx           # 메인 앱 컴포넌트
-│   ├── main.jsx          # 진입점
-│   └── index.css         # 글로벌 스타일
-├── tailwind.config.js    # Tailwind 설정
-├── vite.config.js        # Vite 설정
-└── package.json          # 프로젝트 메타데이터
+├── src/                         # React 프론트엔드
+│   ├── assets/                  # 이미지, 폰트 등
+│   ├── components/              # 재사용 가능한 컴포넌트
+│   ├── context/                 # React Context
+│   │   ├── AuthContext.jsx
+│   │   ├── TripContext.jsx
+│   │   └── LanguageContext.jsx
+│   ├── lib/                     # 유틸리티 함수
+│   │   └── translations.js
+│   ├── pages/                   # 페이지 컴포넌트
+│   │   ├── LandingPage.jsx
+│   │   ├── LoginPage.jsx
+│   │   ├── SignupPage.jsx
+│   │   ├── DashboardPage.jsx
+│   │   ├── PlannerPage.jsx
+│   │   ├── GuidePage.jsx
+│   │   └── SettingsPage.jsx
+│   ├── services/                # API 서비스
+│   ├── App.jsx
+│   └── main.jsx
+├── travel-guide-ai-server/      # FastAPI AI 서버
+│   ├── agents/                  # LangGraph Agents
+│   │   ├── base_agent.py
+│   │   └── destination_agent.py
+│   ├── tools/                   # Agent Tools
+│   │   ├── search_tool.py
+│   │   ├── price_tool.py
+│   │   └── weather_tool.py
+│   ├── models/                  # Pydantic 모델
+│   │   └── schemas.py
+│   ├── routers/                 # API 엔드포인트
+│   │   └── recommendations.py
+│   ├── config/                  # 설정
+│   │   └── settings.py
+│   ├── main.py                  # FastAPI 앱
+│   └── requirements.txt
+├── public/                      # 정적 파일
+├── package.json
+├── tailwind.config.js
+├── vite.config.js
+└── README.md
 ```
 
 ## 🎨 핵심 기능 상세
