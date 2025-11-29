@@ -5,39 +5,56 @@
 LangGraph를 사용하여 구조화된 추론 과정을 거칩니다.
 """
 
-from typing import Dict, Any, List
-from datetime import datetime
-from langgraph.prebuilt import create_react_agent
+from typing import TypedDict, Annotated, Sequence, Literal
+import operator
+from langchain_core.messages import BaseMessage, HumanMessage
+from langgraph.graph import StateGraph, END
+from langgraph.prebuilt import ToolNode
 from agents.base_agent import BaseAgent
 from tools.search_tool import search_destinations, get_destination_details
 from tools.price_tool import get_flight_price, get_accommodation_price, calculate_total_budget
 from tools.weather_tool import get_weather_forecast, check_seasonal_events
 
 
+
+class AgentState(TypedDict):
+    """Agent 상태 정의"""
+    messages: Annotated[Sequence[BaseMessage], operator.add]
+
+
 class DestinationAgent(BaseAgent):
     """
-    여행지 추천 Agent
-    
-    사용자의 선호도(예산, 인원, 여행 스타일, 날짜)를 분석하여
-    최적의 여행지를 추천합니다.
+    여행지 추천 Agent (StateGraph 기반)
     """
     
     def __init__(self):
         """Agent 초기화"""
-        super().__init__(model_name="gemini-pro", temperature=0.7)
-        self.agent_executor = create_react_agent(
-            self.llm,
-            self.tools,
-            state_modifier=self._create_system_prompt()
-        )
-    
-    def _initialize_tools(self) -> List:
-        """
-        Agent가 사용할 Tools 초기화
+        super().__init__()
         
-        Returns:
-            Tool 리스트
-        """
+        # Graph 정의
+        workflow = StateGraph(AgentState)
+        
+        # Node 추가
+        workflow.add_node("agent", self.call_model)
+        workflow.add_node("tools", ToolNode(self.tools))
+        
+        # Edge 정의
+        workflow.set_entry_point("agent")
+        workflow.add_conditional_edges(
+            "agent",
+            self.should_continue,
+            {
+                "tools": "tools",
+                END: END
+            }
+        )
+        workflow.add_edge("tools", "agent")
+        
+        # 컴파일
+        self.app = workflow.compile()
+    
+    def _initialize_tools(self) -> list:
+        """Tools 초기화"""
         return [
             search_destinations,
             get_destination_details,
@@ -48,13 +65,22 @@ class DestinationAgent(BaseAgent):
             check_seasonal_events,
         ]
     
+    def call_model(self, state: AgentState):
+        """LLM 호출 Node"""
+        messages = state['messages']
+        # 시스템 프롬프트가 첫 메시지가 아니면 추가 (선택 사항, 여기서는 run에서 처리)
+        response = self.llm.bind_tools(self.tools).invoke(messages)
+        return {"messages": [response]}
+
+    def should_continue(self, state: AgentState) -> Literal["tools", END]:
+        """분기 조건"""
+        last_message = state['messages'][-1]
+        if last_message.tool_calls:
+            return "tools"
+        return END
+
     def _create_system_prompt(self) -> str:
-        """
-        시스템 프롬프트 생성
-        
-        Returns:
-            시스템 프롬프트
-        """
+        """시스템 프롬프트"""
         return """당신은 전문 여행 컨설턴트 AI입니다.
 
 **역할:**
@@ -90,28 +116,15 @@ class DestinationAgent(BaseAgent):
 - 추천 이유는 구체적이고 설득력 있게 작성
 """
     
-    async def run(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Agent 실행
-        
-        Args:
-            input_data: 사용자 선호도
-                - startDate: 여행 시작일
-                - endDate: 여행 종료일
-                - budget: 예산
-                - numberOfPeople: 인원
-                - travelStyle: 여행 스타일
-        
-        Returns:
-            추천 결과
-        """
+    async def run(self, input_data: dict[str, any]) -> dict[str, any]:
+        """Agent 실행"""
         # 날짜 파싱
         start_date = datetime.strptime(input_data["startDate"], "%Y-%m-%d")
         end_date = datetime.strptime(input_data["endDate"], "%Y-%m-%d")
         days = (end_date - start_date).days
-        month = start_date.month
         
         # 프롬프트 생성
+        system_prompt = self._create_system_prompt()
         user_prompt = f"""
 다음 조건에 맞는 여행지를 추천해주세요:
 
@@ -132,26 +145,21 @@ class DestinationAgent(BaseAgent):
 반드시 Tools를 사용하여 정확한 정보를 제공하세요!
 """
         
-        # Agent 실행
-        result = await self.agent_executor.ainvoke({
-            "messages": [("user", user_prompt)]
-        })
+        # 실행
+        inputs = {
+            "messages": [
+                ("system", system_prompt),
+                ("user", user_prompt)
+            ]
+        }
+        
+        result = await self.app.ainvoke(inputs)
         
         # 결과 파싱
         return self._parse_result(result, input_data)
     
-    def _parse_result(self, result: Dict, input_data: Dict) -> Dict[str, Any]:
-        """
-        Agent 결과 파싱
-        
-        Args:
-            result: Agent 실행 결과
-            input_data: 원본 입력 데이터
-        
-        Returns:
-            파싱된 결과
-        """
-        # Agent의 최종 메시지 추출
+    def _parse_result(self, result: dict, input_data: dict) -> dict[str, any]:
+        """결과 파싱"""
         messages = result.get("messages", [])
         final_message = messages[-1] if messages else None
         
@@ -161,23 +169,14 @@ class DestinationAgent(BaseAgent):
                 "error": "Agent가 결과를 생성하지 못했습니다."
             }
         
-        # 메시지 내용 추출
-        content = final_message.content if hasattr(final_message, 'content') else str(final_message)
-        
-        # 간단한 파싱 (실제로는 더 정교한 파싱 필요)
-        # 여기서는 Mock 데이터 반환
+        # Mock 데이터 반환 (실제 파싱 로직은 추후 구현)
         return self._generate_mock_recommendations(input_data)
     
-    def _generate_mock_recommendations(self, input_data: Dict) -> Dict[str, Any]:
-        """
-        Mock 추천 결과 생성 (개발/테스트용)
-        
-        실제 프로덕션에서는 Agent의 실제 결과를 파싱하여 사용
-        """
+    def _generate_mock_recommendations(self, input_data: dict) -> dict[str, any]:
+        """Mock 데이터 생성 (기존 유지)"""
         style = input_data["travelStyle"]
         budget = input_data["budget"]
         
-        # 스타일별 추천 (간단한 로직)
         recommendations = {
             "beach": [
                 {
@@ -263,13 +262,10 @@ class DestinationAgent(BaseAgent):
             ]
         }
         
-        # 스타일에 맞는 추천 가져오기
         destinations = recommendations.get(style, recommendations["beach"])
-        
-        # 예산 필터링
-        filtered = [d for d in destinations if d["estimatedCost"] <= budget * 1.1]  # 10% 여유
+        filtered = [d for d in destinations if d["estimatedCost"] <= budget * 1.1]
         
         return {
-            "destinations": filtered[:5],  # 상위 5개
+            "destinations": filtered[:5],
             "totalCount": len(filtered)
         }

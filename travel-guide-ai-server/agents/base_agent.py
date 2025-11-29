@@ -3,12 +3,13 @@
 
 모든 Agent가 상속받는 베이스 클래스입니다.
 """
-
+from langchain_teddynote import logging
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from config.settings import settings
 
+logging.langsmith("everywhere-guide")
 
 class BaseAgent(ABC):
     """
@@ -17,7 +18,7 @@ class BaseAgent(ABC):
     모든 Agent는 이 클래스를 상속받아 구현합니다.
     """
     
-    def __init__(self, model_name: str = "gemini-pro", temperature: float = 0.7):
+    def __init__(self, model_name: str = "gpt-4o-mini", temperature: float = 0.7):
         """
         Agent 초기화
         
@@ -25,10 +26,10 @@ class BaseAgent(ABC):
             model_name: 사용할 LLM 모델 이름
             temperature: 생성 온도 (0.0 ~ 1.0)
         """
-        self.llm = ChatGoogleGenerativeAI(
+        self.llm = ChatOpenAI(
             model=model_name,
             temperature=temperature,
-            google_api_key=settings.GOOGLE_API_KEY
+            api_key=settings.OPENAI_API_KEY
         )
         self.tools = self._initialize_tools()
     
