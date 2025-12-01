@@ -14,9 +14,12 @@ class PreferencesRequest(BaseModel):
     
     startDate: str = Field(..., description="여행 시작일 (YYYY-MM-DD)")
     endDate: str = Field(..., description="여행 종료일 (YYYY-MM-DD)")
-    budget: int = Field(..., description="예산 (원)", ge=0)
+    budget: Optional[int] = Field(None, description="예산 (원)", ge=0)
+    isBudgetUndecided: bool = Field(False, description="예산 미정 여부")
     numberOfPeople: int = Field(..., description="인원", ge=1)
     travelStyle: str = Field(..., description="여행 스타일 (beach, culture, adventure, city, nature)")
+    companion: str = Field(..., description="동행자 (친구, 연인, 가족 등)")
+    customRequest: Optional[str] = Field(None, description="추가 요청사항")
     
     class Config:
         json_schema_extra = {
@@ -24,8 +27,11 @@ class PreferencesRequest(BaseModel):
                 "startDate": "2024-08-01",
                 "endDate": "2024-08-07",
                 "budget": 2000000,
+                "isBudgetUndecided": False,
                 "numberOfPeople": 2,
-                "travelStyle": "beach"
+                "travelStyle": "beach",
+                "companion": "친구",
+                "customRequest": "맛있는 해산물 요리를 먹고 싶어요."
             }
         }
 

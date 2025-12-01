@@ -4,12 +4,16 @@ import { useNavigate } from 'react-router-dom';
 import { useTrip } from '../context/TripContext';
 import { useLanguage } from '../context/LanguageContext';
 
+import { getDestinationRecommendations } from '../services/aiService';
+
 export default function PlannerPage() {
   const navigate = useNavigate();
   const { addTrip } = useTrip();
   const { t } = useLanguage();
   const [step, setStep] = useState(0);
   const [hasDestination, setHasDestination] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [recommendations, setRecommendations] = useState([]);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -18,8 +22,11 @@ export default function PlannerPage() {
     startDate: '',
     endDate: '',
     budget: 1000000,
+    isBudgetUndecided: false,
     numberOfPeople: 2,
     travelStyle: '',
+    companion: '',
+    customRequest: '',
   });
 
   const handleNext = () => setStep(step + 1);
@@ -28,6 +35,20 @@ export default function PlannerPage() {
   const handleFinish = () => {
     addTrip(formData);
     navigate('/dashboard');
+  };
+
+  const handleGetRecommendations = async () => {
+    setIsLoading(true);
+    try {
+      const result = await getDestinationRecommendations(formData);
+      setRecommendations(result.destinations || []);
+      handleNext();
+    } catch (error) {
+      console.error("Failed to get recommendations:", error);
+      alert("추천을 불러오는데 실패했습니다. 다시 시도해주세요.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const getTotalSteps = () => {
@@ -60,9 +81,9 @@ export default function PlannerPage() {
       <main className="p-4">
         {step === 0 && <Step0 onSelect={(choice) => { setHasDestination(choice); handleNext(); }} t={t} />}
         {step === 1 && hasDestination && <Step1Yes formData={formData} setFormData={setFormData} onNext={handleNext} t={t} />}
-        {step === 1 && !hasDestination && <Step1No formData={formData} setFormData={setFormData} onNext={handleNext} t={t} />}
+        {step === 1 && !hasDestination && <Step1No formData={formData} setFormData={setFormData} onNext={handleGetRecommendations} isLoading={isLoading} t={t} />}
         {step === 2 && hasDestination && <Step2Yes formData={formData} setFormData={setFormData} onNext={handleNext} t={t} />}
-        {step === 2 && !hasDestination && <Step2No formData={formData} setFormData={setFormData} onNext={handleNext} t={t} />}
+        {step === 2 && !hasDestination && <Step2No formData={formData} setFormData={setFormData} onNext={handleNext} recommendations={recommendations} t={t} />}
         {step === 3 && !hasDestination && <Step3No formData={formData} setFormData={setFormData} onNext={handleNext} t={t} />}
         {((step === 3 && hasDestination) || (step === 4 && !hasDestination)) && <Step4 formData={formData} onFinish={handleFinish} t={t} />}
       </main>
@@ -145,13 +166,21 @@ function Step1Yes({ formData, setFormData, onNext, t }) {
 }
 
 // Step 1 - No path: Collect preferences
-function Step1No({ formData, setFormData, onNext, t }) {
+function Step1No({ formData, setFormData, onNext, isLoading, t }) {
   const travelStyles = [
     { key: 'beach', label: t('planner.styleBeach') },
     { key: 'culture', label: t('planner.styleCulture') },
     { key: 'adventure', label: t('planner.styleAdventure') },
     { key: 'city', label: t('planner.styleCity') },
     { key: 'nature', label: t('planner.styleNature') },
+  ];
+
+  const companions = [
+    { key: 'Alone', label: '혼자' },
+    { key: 'Friend', label: '친구' },
+    { key: 'Partner', label: '연인' },
+    { key: 'Family', label: '가족' },
+    { key: 'Colleague', label: '동료' },
   ];
 
   return (
@@ -204,10 +233,23 @@ function Step1No({ formData, setFormData, onNext, t }) {
 
         {/* Budget */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {t('planner.budgetAmount').replace('{amount}', formData.budget.toLocaleString())}
-          </label>
-          <div className="p-4 bg-white rounded-xl border border-gray-200">
+          <div className="flex justify-between items-center mb-1">
+            <label className="block text-sm font-medium text-gray-700">
+              {formData.isBudgetUndecided 
+                ? "예산 미정" 
+                : t('planner.budgetAmount').replace('{amount}', formData.budget.toLocaleString()) + " (1인당)"}
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+              <input 
+                type="checkbox"
+                checked={formData.isBudgetUndecided}
+                onChange={(e) => setFormData({...formData, isBudgetUndecided: e.target.checked})}
+                className="rounded text-primary focus:ring-primary"
+              />
+              미정
+            </label>
+          </div>
+          <div className={`p-4 bg-white rounded-xl border border-gray-200 transition-opacity ${formData.isBudgetUndecided ? 'opacity-50 pointer-events-none' : ''}`}>
             <div className="flex items-center gap-3">
               <DollarSign className="text-gray-400" size={20} />
               <input 
@@ -218,6 +260,7 @@ function Step1No({ formData, setFormData, onNext, t }) {
                 value={formData.budget}
                 onChange={(e) => setFormData({...formData, budget: parseInt(e.target.value)})}
                 className="w-full accent-primary"
+                disabled={formData.isBudgetUndecided}
               />
             </div>
           </div>
@@ -246,6 +289,26 @@ function Step1No({ formData, setFormData, onNext, t }) {
           </div>
         </div>
 
+        {/* Companion */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">누구와 함께 가시나요?</label>
+          <div className="flex flex-wrap gap-2">
+            {companions.map((comp) => (
+              <button
+                key={comp.key}
+                onClick={() => setFormData({...formData, companion: comp.key})}
+                className={`px-4 py-2 rounded-full border transition text-sm ${
+                  formData.companion === comp.key
+                    ? 'border-primary bg-blue-50 text-primary font-bold'
+                    : 'border-gray-200 bg-white hover:border-blue-300 text-gray-600'
+                }`}
+              >
+                {comp.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Travel Style */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">{t('planner.travelStyle')}</label>
@@ -265,14 +328,32 @@ function Step1No({ formData, setFormData, onNext, t }) {
             ))}
           </div>
         </div>
+
+        {/* Custom Request */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">여행 테마나 특별한 요청사항이 있나요?</label>
+          <textarea 
+            value={formData.customRequest}
+            onChange={(e) => setFormData({...formData, customRequest: e.target.value})}
+            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-primary focus:border-transparent outline-none h-24 resize-none"
+            placeholder="예: 맛집 투어를 위주로 하고 싶어요. 조용한 휴양지를 원해요."
+          />
+        </div>
       </div>
 
       <button 
         onClick={onNext}
-        disabled={!formData.name || !formData.startDate || !formData.endDate || !formData.travelStyle}
-        className="w-full bg-primary text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+        disabled={isLoading || !formData.name || !formData.startDate || !formData.endDate || !formData.travelStyle || !formData.companion}
+        className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg flex items-center justify-center gap-2"
       >
-        {t('planner.next')}
+        {isLoading ? (
+          <>
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <span>AI가 여행지를 찾고 있어요...</span>
+          </>
+        ) : (
+          <span>✨ AI 추천 받기</span>
+        )}
       </button>
     </div>
   );
@@ -348,13 +429,8 @@ function Step2Yes({ formData, setFormData, onNext, t }) {
 }
 
 // Step 2 - No path: Show recommendations
-function Step2No({ formData, setFormData, onNext, t }) {
-  const recommendations = [
-    { name: '다낭, 베트남', price: '₩800,000', type: '해변' },
-    { name: '교토, 일본', price: '₩1,200,000', type: '문화' },
-    { name: '파리, 프랑스', price: '₩2,500,000', type: '도시' },
-    { name: '발리, 인도네시아', price: '₩900,000', type: '자연' },
-  ];
+function Step2No({ formData, setFormData, onNext, recommendations, t }) {
+  // const recommendations = [ ... ]; // Removed hardcoded data
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -384,8 +460,9 @@ function Step2No({ formData, setFormData, onNext, t }) {
                 className={`p-4 rounded-xl border cursor-pointer transition flex justify-between items-center ${formData.destination === rec.name ? 'border-primary bg-blue-50' : 'border-gray-200 bg-white hover:border-blue-300'}`}
               >
                 <div>
-                  <div className="font-bold">{rec.name}</div>
-                  <div className="text-xs text-gray-500">{rec.type} • {rec.price}</div>
+                  <div className="font-bold">{rec.name}, {rec.country}</div>
+                  <div className="text-xs text-gray-500">{rec.reason}</div>
+                  <div className="text-xs font-bold text-primary mt-1">₩{rec.estimatedCost.toLocaleString()}</div>
                 </div>
                 {formData.destination === rec.name && <Check size={20} className="text-primary" />}
               </div>
